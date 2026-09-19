@@ -1,0 +1,12 @@
+131:PD	0	16:43:10.436	FlashEA (XAUUSD,M1)	FLASH PHASE 1 + PHASE 2 SELF-TEST SUITE COMPLETE | TOTAL: 99 | PASSED: 99 | FAILED: 0
+269:QH	0	16:43:10.500	FlashEA (XAUUSD,H1)	FLASH PHASE 1 + PHASE 2 SELF-TEST SUITE COMPLETE | TOTAL: 99 | PASSED: 99 | FAILED: 0
+407:CP	0	16:43:42.245	FlashEA (XAUUSD,M1)	FLASH PHASE 1 + PHASE 2 SELF-TEST SUITE COMPLETE | TOTAL: 99 | PASSED: 99 | FAILED: 0
+545:EG	0	16:43:48.572	FlashEA (XAUUSD,M15)	FLASH PHASE 1 + PHASE 2 SELF-TEST SUITE COMPLETE | TOTAL: 99 | PASSED: 99 | FAILED: 0
+680:FI	0	16:44:01.502	FlashEA (XAUUSD,H1)	FLASH PHASE 1 + PHASE 2 SELF-TEST SUITE COMPLETE | TOTAL: 99 | PASSED: 99 | FAILED: 0
+819:KS	0	16:46:52.340	FlashEA (XAUUSD,M1)	FLASH PHASE 1 + PHASE 2 SELF-TEST SUITE COMPLETE | TOTAL: 99 | PASSED: 99 | FAILED: 0
+957:DE	0	16:46:52.342	FlashEA (XAUUSD,M15)	FLASH PHASE 1 + PHASE 2 SELF-TEST SUITE COMPLETE | TOTAL: 99 | PASSED: 99 | FAILED: 0
+1092:EL	0	16:46:52.390	FlashEA (XAUUSD,H1)	FLASH PHASE 1 + PHASE 2 SELF-TEST SUITE COMPLETE | TOTAL: 99 | PASSED: 99 | FAILED: 0
+1102:JJ	0	18:56:14.458	FlashEA_P3 (XAUUSD,M1)	[FLASH][INIT] Flash EA Phase 2 initializing | build=P3-DEV-20260919-01 (Phase 3: broker-state reconciliation engine, persistent intent, bounded execution retry, structured diagnostics - baseline Phase 2 P2-SAFETYFIX-20260918-02 unmodified)
+1264:FK	0	18:56:14.459	FlashEA_P3 (XAUUSD,M1)	FLASH PHASE 1 + PHASE 2 + PHASE 3 SELF-TEST SUITE COMPLETE | TOTAL: 131 | PASSED: 131 | FAILED: 0
+1271:LN	0	18:56:14.460	FlashEA_P3 (XAUUSD,M1)	[FLASH][RECONCILE] build=P3-DEV-20260919-01 (Phase 3: broker-state reconciliation engine, persistent intent, bounded execution retry, structured diagnostics - baseline Phase 2 P2-SAFETYFIX-20260918-02 unmodified) symbol=XAUUSD magic=260917 owner=true setupId=(null) internalState=RECOVERY_REQUIRED internalDir=(null) | broker: positions=1 pendingOrders=0 unprotected=true brokerDir=BUY otherOwnerPositions=0 otherOwnerPending=0 | intent: closeOutstanding=false cancelOutstanding=false | status=UNPROTECTED_EXPOSURE action=RECON_ACTION_AUTO_REPAIR
+1273:EP	0	18:56:14.460	FlashEA_P3 (XAUUSD,M1)	[FLASH][INIT] Flash EA Phase 2+3 initialization complete | state=RECOVERY_REQUIRED | magic=260917 | symbol=XAUUSD | timeframe=M1 | reversalEnabled=true | build=P3-DEV-20260919-01 (Phase 3: broker-state reconciliation engine, persistent intent, bounded execution retry, structured diagnostics - baseline Phase 2 P2-SAFETYFIX-20260918-02 unmodified)
