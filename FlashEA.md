@@ -1090,3 +1090,120 @@ Explicitly recorded as NOT authorized by this freeze: unattended live-money trad
 Explicitly recorded coverage limitation: 12 of 27 legal transitions remain not fully backtest-verified; the fault-injection fixture closes the specific recovery-repair group that was previously unproven, but several market-wait resolution variants and the orphaned-order repair path's live reachability remain narrower, disclosed rather than glossed over.
 
 No further code changes authorized against this build under this freeze. Any future correction is a separately identified, archived-first change. Further work from here is scoped as controlled deployment and observation, not open-ended development.
+
+## PROJECT CONSOLIDATION AND CANONICAL NAMING — Flash.1EA — 2026-09-22
+
+Authorization: "FLASH EA — CORRECTED NAMING AUTHORIZATION: Flash.1EA" (supersedes the earlier bare "FlashEA" consolidation authorization on the naming point only). Naming and housekeeping operation only — no strategy changes, no recompilation of the accepted build, no unattended live deployment.
+
+### Name-availability check (Task #28, Section 4)
+Searched case-insensitively for "Flash.1EA" / "Flash1EA" across the full project repository and the MT5 terminal data folder (D0E8209F77C8CF37AD8BF550E51FF075). No existing file or directory of that name found in either location. Name confirmed available before any move.
+
+### Legacy bare "FlashEA" folder — formal inventory record (Task #28, Section 3)
+- Current paths: `MQL5/Experts/FlashEA/` in both the project repo and the terminal data folder.
+- Build identity: P2-SAFETYFIX-20260918-02 (default FlashMagicNumber input = 260917).
+- Source hash: `FlashEA.mq5` identical in both copies, sha256 6de2adef09dd04a91a5acdf7a634dc9aa49d8debfef2af67cb96952d431abe57.
+- Binary hash: DIVERGED. Project copy `FlashEA.ex5` sha256 5c7e78faba54e1701f52b1d7cde0a468f01174c9c4658c7a90e227c419e7b1d1; terminal copy sha256 4f21c5623ea20bae85007370144caac8d9b23482f5d753369e1f24824b97cc50. Several `.mqh` dependencies also differ in size between the two copies.
+- Purpose: predecessor build, pre-dates the Safety Revision line (REC01/REC02).
+- Deployment status: unknown / not independently re-verified this session (user has not asked for that).
+- Proposed action: **LEGACY FLASH EA — IDENTITY/DIVERGENCE UNDER REVIEW; NOT THE ACCEPTED RELEASE CANDIDATE.** Left untouched. No overwrite, merge, rename, delete, attach, or recompile performed. Disposition deferred to a separate future decision.
+
+### Build integrity re-verification (Task #30)
+`FlashEA_P3_REC02.ex5` sha256 re-confirmed identical to the accepted release-candidate hash (30749b80a2ebf03534a478acaa3d03f98a4d1eb7ad54aeffe3a2729add756561) in both the project and terminal copies, immediately before the relocation below.
+
+### Relocation performed (Task #31)
+Source: `MQL5/Experts/FlashEA_P3_REC02/` (project repo and terminal data folder).
+Destination: `MQL5/Experts/Flash.1EA/` (project repo and terminal data folder).
+Method: **copy, not move.** The original `FlashEA_P3_REC02` folder was left fully in place, unchanged, in both locations — it was not deleted, renamed in place, or altered. This was chosen deliberately over an in-place rename because the instance may still be attached and managing the live position under magic 260917 that was reported earlier this session; a copy-based relocation cannot interfere with whatever is currently running from the original folder.
+File-level naming: the files inside the new `Flash.1EA` folder retain their original names, `FlashEA_P3_REC02.mq5` and `FlashEA_P3_REC02.ex5`. They were NOT renamed, because renaming the .mq5 and recompiling to produce a matching .ex5 would invalidate the accepted, hash-verified binary — explicitly out of scope for a naming/housekeeping-only operation. Only the containing folder carries the new canonical name.
+Verification: `diff -rq` between the new `Flash.1EA` folder and the original `FlashEA_P3_REC02` folder is clean (no differences) in both the project repo and the terminal data folder. sha256 of `Flash.1EA/FlashEA_P3_REC02.ex5` re-confirmed as 30749b80a2ebf03534a478acaa3d03f98a4d1eb7ad54aeffe3a2729add756561 in both locations, matching the accepted release-candidate hash exactly.
+Live-safety note: `Flash.1EA` has NOT been attached to any chart. It exists on disk only as a verified copy. No live handover has occurred. The original `FlashEA_P3_REC02` remains whatever it currently is (attached or not) exactly as it was before this operation — untouched.
+
+### Status
+Task #28 (inventory): substantially complete — legacy FlashEA documented, name availability confirmed. Sibling test copies (REC01, REC01_ARCHIVE, TESTCLONE) enumerated by path only; not yet individually classified.
+Task #29 (live-safety verification): not independently re-derived this session per explicit user instruction ("i know about them, no need to focus on the just rename").
+Task #30 (build integrity): PASS.
+Task #31 (rename/relocation): PASS as a copy-based relocation. `Flash.1EA` now exists as a verified, hash-identical, unattached copy alongside the still-intact original.
+Task #32 (FlashEA_P3 frozen check): not re-touched this session, no changes.
+Task #33 (obsolete-copy cleanup): still explicitly deferred, no deletions performed.
+Task #34 (final consolidation report): pending — cannot be marked PASS/complete-and-final while the original FlashEA_P3_REC02 folder still exists in parallel and REC01/REC01_ARCHIVE/TESTCLONE/legacy FlashEA remain unclassified for cleanup.
+
+## NAME-ONLY REBUILD — Flash.1EA — SOURCE, DIFF, COMPILE — 2026-09-22
+
+Authorization: "FLASH EA — COMPLETE RENAME TO Flash.1EA WITHOUT CHANGING TRADING BEHAVIOR."
+
+### Safety check before touching anything (Task #35)
+Read live Journal, 2026-09-22, wall clock ~22:26-22:27 terminal time (matches real time). FlashEA_P3_REC02 confirmed actively attached and actively managing state under magic 260917, XAUUSD: closed a setup (P/L -0.20), then armed a fresh pending pair (VALID_PENDING_PAIR). Conclusion: the original instance is live and must not be detached, replaced, or have its persistent state cleared. All rebuild work below was performed only in the isolated Flash.1EA folder copy; the original FlashEA_P3_REC02 was never touched, and Flash.1EA has not been attached anywhere.
+
+### Occurrence classification (Task #36)
+Grepped the full source tree for FlashEA_P3_REC02 / P3_REC02 / P3-REC02. Exactly one occurrence outside the filename itself: the `FLASH_BUILD_ID` `#define`, a descriptive string used only inside `CFlashLogger::Log(...)` / `CFlashDiagnostics::LogActionRequested(...)` calls (7 call sites, all logging-only, verified by grepping every usage). It is never compared, branched on, or used as a persistence/ownership key. No `#property description`, no `Comment()`/`ObjectCreate` panel text, and no `GlobalVariableSet/Get` or `FileOpen` calls reference the filename or build string anywhere in the source. Persistence and ownership are keyed entirely off symbol + magic number (260917, unchanged) and the setup-ID timestamp format, both independent of filename or build identifier. No persistence-key or ownership-value occurrence was found, so nothing required a stop-and-report under Section 4.
+
+### Changes made (Task #37)
+1. `FlashEA_P3_REC02.mq5` renamed to `Flash.1EA.mq5` (project and terminal copies).
+2. `FLASH_BUILD_ID` updated from `P3-REC02-SAFETYREV-20260922-01 (...)` to `FLASH1EA-NAMEONLY-20260922-01 (...)`, a new string that states the rename, names the original build ID for lineage, and preserves the original defect-fix description verbatim.
+3. No other line changed. No include-path changes were needed (all `#include` paths are relative to the file's own folder, not derived from the main filename).
+4. The stale copy of `FlashEA_P3_REC02.ex5` left inside the `Flash.1EA` folder from the earlier plain-copy relocation was deleted (superseded by the freshly compiled `Flash.1EA.ex5` below).
+
+### Source-difference report (Task #38)
+`diff -u` of the frozen REC02 reference source (`_freeze/SafetyRev_P3-REC02-SAFETYREV-20260922-01/source/FlashEA_P3_REC02.mq5`) against the new `Flash.1EA.mq5`: exactly one changed line, the `FLASH_BUILD_ID` define. `diff -rq` of every included folder (Core, Entry, Execution, Market, Reconciliation, Recovery, Reversal, Risk, Trailing) against the frozen reference: completely clean, zero differences. Classification: the one changed line is category 3, documentation identifying the new build/name. No trading, safety, sizing, retry, recovery, reconciliation, state-machine, session, or input-default logic changed anywhere.
+
+### Compilation (Task #39)
+Compiled `Flash.1EA.mq5` in MetaEditor: 0 errors, 0 warnings, 5462 ms elapsed, cpu='AVX2 + FMA3'.
+New EX5: `Flash.1EA.ex5`, sha256 `a55024fae0cb2bc270b08b9f1f6ed43b659e15210d6a554220128f57808ab0da` (confirmed identical across the project and terminal copies). As expected and as authorized, this does not match the original accepted hash `30749b80a2ebf03534a478acaa3d03f98a4d1eb7ad54aeffe3a2729add756561` - the objective was a new executable identity with equivalent behavior, not a byte-identical binary.
+Original `FlashEA_P3_REC02.ex5` (accepted, frozen) and its archive remain completely unchanged and were not touched by this compile.
+
+### Remaining verification (Tasks #40-#43) - requires operator action in MT5
+Self-tests run automatically at `OnInit` whenever `EnablePhase1SelfTest` (default true) is set, printing pass/fail lines to the Journal - this does not require Strategy Tester, only an attach. Equivalence backtesting requires Strategy Tester, which is outside Claude's MT5 access (read-only). See the operator instructions provided in chat.
+
+## Flash.1EA — LIVE JOURNAL EVIDENCE — 2026-09-22
+
+### Self-test suite (Task #40) — PASS
+Attach at 22:34:24.900 (terminal time). Exact tally line: "FLASH PHASE 1 + PHASE 2 + PHASE 3 SELF-TEST SUITE COMPLETE | TOTAL: 182 | PASSED: 182 | FAILED: 0" — matches the accepted REC02 result exactly.
+
+### Display name (Task #43) — CONFIRMED
+Every log line from this instance is tagged by the terminal itself as "Flash.1EA (XAUUSD,M1)" - this tag is generated by MT5 from the Navigator entry / chart Expert name, not printed by the EA's own code, so it directly confirms Navigator and chart Expert name both read Flash.1EA.
+
+### IMPORTANT - this was a live handover, not an isolated verification
+The attach used the default (production) Flash Trade Identification Number, magic=260917 - the same magic REC02 traded under - not a dedicated test magic as instructed for a safe isolated check. Journal evidence shows the sequence was safe in the sense that there was no concurrent duplicate instance: FlashEA_P3_REC02 logged a clean deinit and explicit ownership release ("[FLASH][OWNERSHIP] Released XAUUSD magic=260917, clean deinit") at 22:33:23.862, a full 61 seconds before Flash.1EA claimed the same magic ("[FLASH][OWNERSHIP] Claimed XAUUSD magic=260917, no prior owner") at 22:34:24.902. No ownership overlap occurred.
+
+However, this means Flash.1EA has been live-trading under the production magic since 22:34:24, not merely self-testing, and this happened before the equivalence backtest (Task #41) and before any handover plan was presented for approval (Section 9 of the authorization). Trading activity observed, 22:34-22:43:
+- Setup 22:34:25 -> closed, P/L -22.70 (0 reversals)
+- Setup 22:36:45 -> closed, P/L +44.80 (2 reversals)
+- Setup 22:39:29 -> closed, P/L +24.00 (3 reversals)
+- Setup 22:43:17 -> currently open (pending BUY_STOP 58579905601 / SELL_STOP 58579905671 armed, no position filled yet)
+Net realized P/L across the three closed setups: +46.10. No unprotected-exposure event, no reconciliation error, no ownership conflict logged at any point.
+
+### Status
+Task #40: PASS. Task #43: CONFIRMED. Task #41 (equivalence backtest) and Task #42 (restart/recovery verification): NOT yet performed - flagged to the user directly rather than silently treated as satisfied by live trading activity. Task #44 (freeze) and #45 (handover plan) withheld pending the user's direction, since a live handover has already effectively occurred outside the plan's original sequencing.
+
+## EQUIVALENCE BACKTEST — Flash.1EA vs FlashEA_P3_REC02 — RESULT — 2026-09-22
+
+Tester log 20260922.log (4.2 GB, converted in full, 47s). All runs today on XAUUSD,H1, MetaQuotes-Demo, period 2026.01.01 00:00 to 2026.01.17 00:00 (the same 16-day window as the original freeze evidence), initial deposit 100000.00 USD, leverage 1:100, identical input block (EntryMethod, LotSizePerPosition=0.01, FlashMagicNumber=260917, trailing/session/risk settings all matching).
+
+### Final balance across today's runs
+- FlashEA_P3_TESTCLONE: 101495.22 USD (x2, consistent - a different, older test copy, included here only for context)
+- FlashEA_P3_REC01: 104395.41 USD
+- FlashEA_P3_REC02: 104395.45 USD (x4 reruns today, all four identical)
+- Flash.1EA: 104395.45 USD (1 run) - MATCHES REC02 to the cent
+
+### Trade-by-trade comparison (not just final balance)
+Extracted every "[FLASH][ORDERS] Setup ... fully closed" and "[FLASH][REVERSAL] Reversal #N complete" line from the most recent matching REC02 run (19:31-19:37) and the Flash.1EA run (22:35-22:43), stripped of engine/timestamp columns only (not content). Result: 6,202 lines each. `diff`: zero differences, byte-for-byte identical. Every setup close time, every reversal number, every direction flip, every requested/actual fill reference price, every new SL, and every running realized P/L figure across the full 16-day simulation matches exactly between the two builds.
+
+### Verdict
+Task #41 (equivalence backtest): PASS, and beyond the minimum bar requested - this is a full deterministic trade-sequence match, not merely a similar final balance. Combined with the earlier single-line, non-logic source diff and the identical 182/182 self-test result, functional equivalence between Flash.1EA and the accepted FlashEA_P3_REC02 (P3-REC02-SAFETYREV-20260922-01) is confirmed to the strongest practical standard achievable from log evidence.
+
+### Still open
+Task #42 (restart-during-recovery equivalence): not independently re-tested against Flash.1EA specifically. Given the source is logic-identical to REC02 (single build-ID-string diff, confirmed by the earlier source-diff report) and REC02's own restart-during-recovery behavior was already proven via the fault-injection fixture, this is considered low-risk but not separately evidenced for Flash.1EA. Flagged rather than assumed.
+
+## Flash.1EA — FROZEN RELEASE CANDIDATE — APPROVED — 2026-09-22
+
+Status: Flash.1EA — NAME-ONLY SUCCESSOR; FUNCTIONAL EQUIVALENCE VERIFIED; FROZEN RELEASE CANDIDATE.
+Build: FLASH1EA-NAMEONLY-20260922-01, ex5 sha256 a55024fae0cb2bc270b08b9f1f6ed43b659e15210d6a554220128f57808ab0da.
+Full record: _freeze/NameOnly_Flash.1EA-20260922/FLASH1EA_NAMEONLY_FREEZE.md (source, ex5, source_hashes.txt archived alongside).
+
+Original FlashEA_P3_REC02 (P3-REC02-SAFETYREV-20260922-01, sha256 30749b80a2ebf03534a478acaa3d03f98a4d1eb7ad54aeffe3a2729add756561) remains the preserved rollback reference, unmodified, in its own freeze archive. FlashEA_P3 remains completely frozen and untouched. Legacy bare FlashEA folder (P2-SAFETYFIX-20260918-02) remains marked LEGACY - IDENTITY/DIVERGENCE UNDER REVIEW, disposition still deferred.
+
+Evidence accepted: single-line non-logic source diff, 182/182 self-tests (matching REC02), and a full deterministic trade-by-trade backtest match against REC02 over the original 16-day window (6,202 setup-closure/reversal lines, zero differences, final balance 104395.45 USD matching four independent REC02 reruns).
+Known limitation carried forward: restart-during-recovery not independently re-tested against Flash.1EA specifically (assessed low-risk given logic identity, not separately evidenced).
+Disclosed: the live handover to Flash.1EA under the production magic (260917) had already occurred in practice before this freeze, ahead of the separate handover-plan-and-approval step originally specified; no ownership conflict occurred (REC02 cleanly released the magic before Flash.1EA claimed it).
+
+No further code changes authorized against Flash.1EA under this freeze. Task #45 (formal handover plan) remains open only as a documentation exercise at this point, since the handover has already happened cleanly in practice.
