@@ -27,7 +27,7 @@
 // rather than inferring it from a compile timestamp. Bump this string any
 // time FlashEA.mq5 or any of its included .mqh files changes, so it is
 // never ambiguous which fixes a given test run exercised.
-#define FLASH_BUILD_ID "FLASH1EA-NAMEONLY-20260922-01 (Name-only successor build. Renamed from FlashEA_P3_REC02 (P3-REC02-SAFETYREV-20260922-01) to Flash.1EA per corrected naming authorization; source is line-for-line identical except filename, include-path, and this build-identifier string - no entry, exit, trailing, reversal, risk, recovery, reconciliation, or state-machine logic changed. Original description retained for lineage: Safety Revision: (1) RECOVERY_REQUIRED now has a reachable exit condition for every escalation cause via TryReconcileFromRecovery - unprotected exposure is repaired (restore a known-good SL) or risk-reducingly closed, an adopted protected position resumes normal management instead of starting a new setup, orphaned/stray orders are cancelled, and a clean account returns to scanning - not deferred to an unreachable Phase 2 path; (2) PlaceOrRefreshSetup no longer declares its initial-pair unwind complete merely because a cancel request was sent - an unverified cancellation now escalates to RECOVERY_REQUIRED instead of blindly resetting to WAITING_FOR_ENTRY; (3) CFlashTrailing::UpdateSetup is now gated by the shared CFlashMarketWait no-spam mechanism and skips resubmitting an unchanged rejected candidate, instead of sending a fresh broker request every tick; frozen baseline P3-DEV-20260919-01, REC01 P3-REC-20260922-01, REC02 P3-REC02-20260922-01, and this name-only rebuild source all preserved unmodified/archived)"
+#define FLASH_BUILD_ID "FLASH1EA-DOUBLEFILLFIX-20260923-02 (Clean release candidate. Test-only Strategy Tester injection (TestInject_ForceDoubleFillOnce, g_testInjectionFired, g_testDiagEvidenceLogged, the injection block in PlaceOrRefreshSetup, the one-shot evidence diagnostic in TryReconcileFromRecovery, and CFlashOrders::TestOnlyOpenMarketPosition) fully removed after its authorized focused verification passed 2026-09-23 21:21:48 - both legs filled, EXPOSURE_DISCREPANCY correctly raised, all 9 evidence criteria confirmed true, both accidental legs closed via real market deals, RECOVERY_REQUIRED to WAITING_FOR_ENTRY, normal scanning resumed. Retains, as real production corrections found through that verification: the original direct double-fill recovery correction (FLASH1EA-DOUBLEFILLFIX-20260923-01 - one narrowly-scoped automated repair path for a CONFIRMED initial-bracket double-fill, confirmed live 2026-09-23 01:37:20, tickets 58580621119/58580621140, 47ms apart; detection via ClassifyConfirmedDoubleFill/GatherDoubleFillEvidence, repair via RepairConfirmedDoubleFillFromRecovery as a risk-reducing unwind never adopting either leg as directional, persisted restart-safe unwind-active flag; no entry, exit, sizing, trailing, reversal, profit-target, filter, daily-limit, other recovery route, ownership, or persistence-key logic changed) plus a truncation-tolerance fix discovered by the focused verification itself - MT5 commonly truncates a market-execution position comment (observed: 31 characters), so SetupIdConsistentWithInternalRecord inside GatherDoubleFillEvidence now also accepts a truncated setup tag that is an exact prefix of the untruncated internal record, in addition to exact equality; touches only that one comparison, no other evidence field, classifier, or routing logic. Previous NAME-ONLY build retained: FLASH1EA-NAMEONLY-20260922-01, hash a55024fae0cb2bc270b08b9f1f6ed43b659e15210d6a554220128f57808ab0da. Frozen baseline P3-DEV-20260919-01, REC01 P3-REC-20260922-01, REC02 P3-REC02-20260922-01, and every INJTEST revision remain unmodified/archived)"
 #define FLASH_SETUP_EXIT_RETRY_COOLDOWN_SECONDS 2  // seconds between HandleSetupExit retry attempts - Phase 2 baseline, superseded operationally by CFlashExecutionControl's own MinDelaySeconds below but left defined for compatibility
 
 #include "Core\FlashConfig.mqh"
@@ -70,7 +70,6 @@ input long   FlashMagicNumber            = 260917;   // Flash Trade Identificati
 //--- Group D: Diagnostics
 input bool EnableDetailedLogging         = true; // Enable Detailed Logging
 input bool EnablePhase1SelfTest          = true; // Enable Phase 1 and Phase 2 Self-Test Suite
-
 //--- Group E: Trailing
 input double TrailingActivationDistance  = 1.00; // Trailing Activation Distance (Gold Price)
 input double TrailingStopDistance        = 1.00; // Trailing Stop Distance (Gold Price)
@@ -254,6 +253,79 @@ ENUM_FLASH_MKTWAIT_ACTION ClassifyMarketWaitResolution(const SFlashMarketWaitInp
       return FLASH_MKTWAIT_ESCALATE; // orphaned order / unexpected exposure / ownership ambiguity - never resume with this outstanding
 
    return FLASH_MKTWAIT_RECONCILED_CLEAR;
+}
+
+//+------------------------------------------------------------------+
+//| Direct Double-Fill Recovery Correction (2026-09-23) - pure        |
+//| classifier for a CONFIRMED initial-bracket double-fill, the one   |
+//| narrow sub-case of EXPOSURE_DISCREPANCY this correction adds an   |
+//| automated repair path for. Live evidence (2026-09-23 01:37:20):   |
+//| both legs of a bracket pending-order pair filled within 47ms of   |
+//| each other, leaving two Flash-owned opposite-direction positions  |
+//| under one setup - CFlashReconciliation::Classify() correctly      |
+//| calls this EXPOSURE_DISCREPANCY (it is not an authorized shape),  |
+//| but until now ClassifyRecoveryRepairRoute() had no route for it   |
+//| other than STAY_BLOCKED, so Flash sat in RECOVERY_REQUIRED         |
+//| indefinitely with no automated resolution.                        |
+//|                                                                    |
+//| This does NOT relax EXPOSURE_DISCREPANCY generally: an unexplained |
+//| position, a manual trade sharing the magic, or any other shape     |
+//| still stays blocked exactly as before. Only a position pair that   |
+//| independently satisfies every check below is treated as a          |
+//| confirmed accidental double-fill of Flash's own initial bracket.   |
+//|                                                                    |
+//| Evidence is deliberately restart-safe: it is derived from durable  |
+//| broker-stored facts (each position's own comment, volume, and open |
+//| time), never from in-memory g_setup order-ticket arrays alone,     |
+//| which are empty again after any EA/terminal restart. Placement     |
+//| already tags initial-bracket orders "FLASH|<setupId>" and reversal |
+//| orders "FLASHREV|<setupId>|<n>" (see PlaceOrRefreshSetup and       |
+//| ArmReversalOrder) - MT5 carries an order's comment onto the        |
+//| position it fills into, so this tag survives on the position       |
+//| itself across any restart.                                         |
+//|                                                                    |
+//| Pure and independently self-testable with synthetic evidence,       |
+//| exactly like CFlashReconciliation::Classify and                    |
+//| ClassifyAutoRecoveryAction already are - it touches no broker or   |
+//| global state and has no side effects. GatherDoubleFillEvidence()   |
+//| (defined later, near RepairConfirmedDoubleFillFromRecovery) is the |
+//| only function that reads live broker state and builds this input.  |
+//+------------------------------------------------------------------+
+#define FLASH_DOUBLEFILL_INITIAL_TAG "FLASH|"
+// Bound on how far apart (in seconds) two positions may have opened and
+// still be considered one accidental double-fill. The confirmed live
+// incident was 47 milliseconds; 15 seconds is a generous margin for a
+// slower broker race while remaining far tighter than any realistic gap
+// between two genuinely unrelated positions under the same magic.
+#define FLASH_DOUBLEFILL_MAX_FILL_GAP_SECONDS 15
+
+struct SFlashDoubleFillEvidence
+{
+   bool  ExactlyTwoPositions;                  // snap.OpenPositionCount == 2, both lines present
+   bool  NoPendingOrdersRemain;                 // no Flash-owned pending order left over
+   bool  DirectionsOpposite;                    // one BUY, one SELL (snap.BrokerActiveDirection == "MIXED")
+   bool  BothAreInitialBracketFills;            // both comments start with "FLASH|", neither "FLASHREV|..."
+   bool  SameSetupTag;                          // both comments carry the identical setupId suffix
+   bool  SetupIdConsistentWithInternalRecord;   // true if no live internal setup id is known yet, or it agrees with the tag
+   bool  NoReversalRecorded;                    // g_setup.ReversalCount == 0 - not produced by a reversal
+   bool  VolumesMatch;                          // both legs the same volume, as a single bracket pair always is
+   bool  OpenedCloseTogether;                   // both POSITION_TIME within FLASH_DOUBLEFILL_MAX_FILL_GAP_SECONDS
+   ulong Position1Ticket;
+   ulong Position2Ticket;
+   bool  Position1IsBuy;
+};
+
+bool ClassifyConfirmedDoubleFill(const SFlashDoubleFillEvidence &ev)
+{
+   return ev.ExactlyTwoPositions
+       && ev.NoPendingOrdersRemain
+       && ev.DirectionsOpposite
+       && ev.BothAreInitialBracketFills
+       && ev.SameSetupTag
+       && ev.SetupIdConsistentWithInternalRecord
+       && ev.NoReversalRecorded
+       && ev.VolumesMatch
+       && ev.OpenedCloseTogether;
 }
 
 //+------------------------------------------------------------------+
@@ -905,6 +977,59 @@ void RunPhase1SelfTestSuite()
    SelfTestAssert("RecoveryRoute: MATCHED_ARMED_SETUP -> STAY_BLOCKED (not an active-position case)",
       ClassifyRecoveryRepairRoute(FLASH_RECON_MATCHED_ARMED_SETUP) == FLASH_RECOVERY_ROUTE_STAY_BLOCKED);
 
+   //--- Direct Double-Fill Recovery Correction (2026-09-23): ClassifyRecoveryRepairRouteWithDoubleFill, pure ---
+   SelfTestAssert("RecoveryRouteWithDoubleFill: unwind inactive, EXPOSURE_DISCREPANCY -> falls through to STAY_BLOCKED unchanged",
+      ClassifyRecoveryRepairRouteWithDoubleFill(FLASH_RECON_EXPOSURE_DISCREPANCY, false) == FLASH_RECOVERY_ROUTE_STAY_BLOCKED);
+   SelfTestAssert("RecoveryRouteWithDoubleFill: unwind inactive, UNPROTECTED_EXPOSURE -> unaffected, still REPAIR_UNPROTECTED",
+      ClassifyRecoveryRepairRouteWithDoubleFill(FLASH_RECON_UNPROTECTED_EXPOSURE, false) == FLASH_RECOVERY_ROUTE_REPAIR_UNPROTECTED);
+   SelfTestAssert("RecoveryRouteWithDoubleFill: unwind active -> REPAIR_DOUBLE_FILL regardless of current status",
+      ClassifyRecoveryRepairRouteWithDoubleFill(FLASH_RECON_MATCHED_ACTIVE_SETUP, true) == FLASH_RECOVERY_ROUTE_REPAIR_DOUBLE_FILL);
+
+   //--- Direct Double-Fill Recovery Correction (2026-09-23): ClassifyConfirmedDoubleFill, pure, synthetic evidence ---
+   SFlashDoubleFillEvidence dfBase;
+   dfBase.ExactlyTwoPositions = true; dfBase.NoPendingOrdersRemain = true; dfBase.DirectionsOpposite = true;
+   dfBase.BothAreInitialBracketFills = true; dfBase.SameSetupTag = true; dfBase.SetupIdConsistentWithInternalRecord = true;
+   dfBase.NoReversalRecorded = true; dfBase.VolumesMatch = true; dfBase.OpenedCloseTogether = true;
+   dfBase.Position1Ticket = 111; dfBase.Position2Ticket = 222; dfBase.Position1IsBuy = true;
+   SelfTestAssert("DoubleFill: every criterion satisfied -> confirmed",
+      ClassifyConfirmedDoubleFill(dfBase) == true);
+
+   SFlashDoubleFillEvidence dfNotTwo = dfBase; dfNotTwo.ExactlyTwoPositions = false;
+   SelfTestAssert("DoubleFill: not exactly two positions -> not confirmed",
+      ClassifyConfirmedDoubleFill(dfNotTwo) == false);
+
+   SFlashDoubleFillEvidence dfPending = dfBase; dfPending.NoPendingOrdersRemain = false;
+   SelfTestAssert("DoubleFill: a pending order remains -> not confirmed",
+      ClassifyConfirmedDoubleFill(dfPending) == false);
+
+   SFlashDoubleFillEvidence dfSameDir = dfBase; dfSameDir.DirectionsOpposite = false;
+   SelfTestAssert("DoubleFill: directions not opposite -> not confirmed",
+      ClassifyConfirmedDoubleFill(dfSameDir) == false);
+
+   SFlashDoubleFillEvidence dfReversalTag = dfBase; dfReversalTag.BothAreInitialBracketFills = false;
+   SelfTestAssert("DoubleFill: not both tagged as initial-bracket fills (e.g. one is FLASHREV|) -> not confirmed",
+      ClassifyConfirmedDoubleFill(dfReversalTag) == false);
+
+   SFlashDoubleFillEvidence dfDiffSetup = dfBase; dfDiffSetup.SameSetupTag = false;
+   SelfTestAssert("DoubleFill: setup tags disagree (unrelated position) -> not confirmed",
+      ClassifyConfirmedDoubleFill(dfDiffSetup) == false);
+
+   SFlashDoubleFillEvidence dfInternalMismatch = dfBase; dfInternalMismatch.SetupIdConsistentWithInternalRecord = false;
+   SelfTestAssert("DoubleFill: tag disagrees with a known live internal setup id -> not confirmed",
+      ClassifyConfirmedDoubleFill(dfInternalMismatch) == false);
+
+   SFlashDoubleFillEvidence dfReversal = dfBase; dfReversal.NoReversalRecorded = false;
+   SelfTestAssert("DoubleFill: a reversal was recorded for this setup -> not confirmed (not an initial-bracket case)",
+      ClassifyConfirmedDoubleFill(dfReversal) == false);
+
+   SFlashDoubleFillEvidence dfVolume = dfBase; dfVolume.VolumesMatch = false;
+   SelfTestAssert("DoubleFill: volumes differ -> not confirmed",
+      ClassifyConfirmedDoubleFill(dfVolume) == false);
+
+   SFlashDoubleFillEvidence dfTiming = dfBase; dfTiming.OpenedCloseTogether = false;
+   SelfTestAssert("DoubleFill: positions did not open close together -> not confirmed",
+      ClassifyConfirmedDoubleFill(dfTiming) == false);
+
    // Note (documented, not silently omitted): PlaceOrRefreshSetup's
    // unwind-verification fix and the AdoptActivePositionFromRecovery /
    // RepairOrphanedOrderFromRecovery / RepairOrExitUnprotectedFromRecovery
@@ -1180,6 +1305,7 @@ bool PlaceOrRefreshSetup(const bool isRefresh)
 
    g_state.TransitionTo(FLASH_STATE_ORDERS_ARMED, "both sides placed and verified");
    g_timeframe.MarkRefreshed();
+
    return true;
 }
 
@@ -2203,6 +2329,7 @@ enum ENUM_FLASH_RECOVERY_ROUTE
    FLASH_RECOVERY_ROUTE_ADOPT_ACTIVE,
    FLASH_RECOVERY_ROUTE_REPAIR_ORPHANED_ORDER,
    FLASH_RECOVERY_ROUTE_REPAIR_UNPROTECTED,
+   FLASH_RECOVERY_ROUTE_REPAIR_DOUBLE_FILL, // Direct Double-Fill Recovery Correction (2026-09-23) - confirmed accidental double-fill only
    FLASH_RECOVERY_ROUTE_STAY_BLOCKED
 };
 
@@ -2228,6 +2355,238 @@ ENUM_FLASH_RECOVERY_ROUTE ClassifyRecoveryRepairRoute(const ENUM_FLASH_RECON_STA
    }
 }
 
+// Direct Double-Fill Recovery Correction (2026-09-23) - pure wrapper
+// around ClassifyRecoveryRepairRoute above, which is left completely
+// unmodified (every existing self-test against it still exercises the
+// exact same function, unchanged). doubleFillUnwindActive is true only
+// once TryReconcileFromRecovery has independently confirmed a double
+// fill via ClassifyConfirmedDoubleFill and persisted that finding (see
+// IsDoubleFillUnwindActive) - for every account/session that has never
+// hit a confirmed double-fill, this flag is always false and this
+// wrapper returns byte-for-byte the same route ClassifyRecoveryRepairRoute
+// already would, so no other recovery outcome changes.
+ENUM_FLASH_RECOVERY_ROUTE ClassifyRecoveryRepairRouteWithDoubleFill(const ENUM_FLASH_RECON_STATUS status, const bool doubleFillUnwindActive)
+{
+   if(doubleFillUnwindActive)
+      return FLASH_RECOVERY_ROUTE_REPAIR_DOUBLE_FILL;
+   return ClassifyRecoveryRepairRoute(status);
+}
+
+// Direct Double-Fill Recovery Correction (2026-09-23) - persisted,
+// restart-safe marker that a confirmed double-fill unwind is in
+// progress for this symbol/magic. Same GlobalVariable mechanism and
+// naming convention CFlashMarketWait and CFlashIntent already use;
+// added here, local to this file, rather than editing the shared
+// Core/FlashIntent.mqh, to keep this correction's footprint entirely
+// inside the one file the authorization scopes it to. Set only at the
+// single detection site in TryReconcileFromRecovery once
+// ClassifyConfirmedDoubleFill returns true, and cleared only once
+// RepairConfirmedDoubleFillFromRecovery independently reconciles the
+// account back to FLASH_RECON_NO_EXPOSURE - never on a timeout, never
+// guessed.
+string FlashDoubleFillUnwindKey(const string symbol, const long magic)
+{
+   return StringFormat("FLASH_P3_DOUBLEFILL_UNWIND_ACTIVE_%s_%d", symbol, (int)magic);
+}
+
+bool IsDoubleFillUnwindActive(const string symbol, const long magic)
+{
+   string k = FlashDoubleFillUnwindKey(symbol, magic);
+   return GlobalVariableCheck(k) && GlobalVariableGet(k) != 0.0;
+}
+
+void SetDoubleFillUnwindActive(const string symbol, const long magic, const bool active)
+{
+   GlobalVariableSet(FlashDoubleFillUnwindKey(symbol, magic), active ? 1.0 : 0.0);
+}
+
+void ClearDoubleFillUnwindActive(const string symbol, const long magic)
+{
+   GlobalVariableDel(FlashDoubleFillUnwindKey(symbol, magic));
+}
+
+// Live-evidence orchestrator for the pure ClassifyConfirmedDoubleFill
+// classifier above. Reads only live broker state already present in
+// the snapshot plus each position's own comment/time (both durable,
+// restart-safe broker facts) and g_setup.ReversalCount (a redundant,
+// same-session-only corroboration that is simply always true - never
+// false - after a restart, so it never produces a false negative).
+// Touches no broker/global state itself and sends nothing - pure
+// read, exactly like CFlashReconciliation::Inspect above it.
+SFlashDoubleFillEvidence GatherDoubleFillEvidence(const SFlashReconSnapshot &snap)
+{
+   SFlashDoubleFillEvidence ev;
+   ev.ExactlyTwoPositions = (snap.OpenPositionCount == 2 && ArraySize(snap.Positions) == 2);
+   ev.NoPendingOrdersRemain = (snap.PendingOrderCount == 0);
+   ev.DirectionsOpposite = (snap.BrokerActiveDirection == "MIXED");
+   ev.BothAreInitialBracketFills = false;
+   ev.SameSetupTag = false;
+   ev.SetupIdConsistentWithInternalRecord = false;
+   ev.NoReversalRecorded = (g_setup.ReversalCount == 0);
+   ev.VolumesMatch = false;
+   ev.OpenedCloseTogether = false;
+   ev.Position1Ticket = 0;
+   ev.Position2Ticket = 0;
+   ev.Position1IsBuy = false;
+
+   if(!ev.ExactlyTwoPositions)
+      return ev; // nothing further can be safely evaluated without exactly two positions
+
+   ev.Position1Ticket = snap.Positions[0].Ticket;
+   ev.Position2Ticket = snap.Positions[1].Ticket;
+   ev.Position1IsBuy = (snap.Positions[0].TypeCode == POSITION_TYPE_BUY);
+   ev.VolumesMatch = (MathAbs(snap.Positions[0].Volume - snap.Positions[1].Volume) < 0.0000001);
+
+   int tagLen = StringLen(FLASH_DOUBLEFILL_INITIAL_TAG);
+   string c1 = snap.Positions[0].Comment;
+   string c2 = snap.Positions[1].Comment;
+   bool tag1 = (StringSubstr(c1, 0, tagLen) == FLASH_DOUBLEFILL_INITIAL_TAG);
+   bool tag2 = (StringSubstr(c2, 0, tagLen) == FLASH_DOUBLEFILL_INITIAL_TAG);
+   ev.BothAreInitialBracketFills = tag1 && tag2;
+
+   if(ev.BothAreInitialBracketFills)
+   {
+      string setupTag1 = StringSubstr(c1, tagLen);
+      string setupTag2 = StringSubstr(c2, tagLen);
+      ev.SameSetupTag = (StringLen(setupTag1) > 0 && setupTag1 == setupTag2);
+      // Broker-truncation tolerant: MT5 commonly truncates a market
+      // execution's position comment (observed: 31 characters), so a
+      // setup tag longer than the truncation limit never matches the
+      // untruncated internal record under exact equality alone - the
+      // confirmed live incident's own tag (33 chars after "FLASH|")
+      // would hit this. A truncated tag that is an exact prefix of the
+      // internal record is still the same setup; only genuinely
+      // different setup ids are rejected.
+      bool setupIdExactMatch = (setupTag1 == snap.InternalSetupId);
+      bool setupIdPrefixMatch = (StringLen(setupTag1) > 0 && StringLen(setupTag1) < StringLen(snap.InternalSetupId)
+                                  && StringSubstr(snap.InternalSetupId, 0, StringLen(setupTag1)) == setupTag1);
+      ev.SetupIdConsistentWithInternalRecord = (StringLen(snap.InternalSetupId) == 0 || setupIdExactMatch || setupIdPrefixMatch);
+   }
+
+   datetime t1 = PositionSelectByTicket(ev.Position1Ticket) ? (datetime)PositionGetInteger(POSITION_TIME) : 0;
+   datetime t2 = PositionSelectByTicket(ev.Position2Ticket) ? (datetime)PositionGetInteger(POSITION_TIME) : 0;
+   if(t1 != 0 && t2 != 0)
+      ev.OpenedCloseTogether = (MathAbs((long)t1 - (long)t2) <= FLASH_DOUBLEFILL_MAX_FILL_GAP_SECONDS);
+
+   return ev;
+}
+
+// Repair orchestrator for a confirmed double-fill. Reuses the SAME
+// bounded-retry budget (g_recoveryRepairBudget / CFlashExecutionControl),
+// the SAME single-ticket close-intent tracking (CFlashIntent), and the
+// SAME no-spam market-closed gate (CFlashMarketWait) every other
+// recovery-repair function in this file already uses - one repair
+// engine, not two. Never adopts either leg as a directional trade
+// (accidental double-fills are not an authorized shape and there is no
+// basis to prefer one direction over the other); both legs are closed
+// as a risk-reducing unwind, then the account returns to
+// WAITING_FOR_ENTRY exactly like the CLEAR_TO_WAITING route already
+// does for a clean account.
+//
+// Broker-truth-first, restart-safe: every call re-derives what remains
+// from the freshly-gathered snapshot, never from a remembered count, so
+// this function behaves identically whether it is the first tick after
+// detection, a later tick after one leg already closed, or the first
+// tick after an EA/terminal restart mid-unwind (OnInit's
+// EnforceDoubleFillUnwindOverride keeps the state machine in
+// RECOVERY_REQUIRED across such a restart so this function keeps
+// running - see below).
+void RepairConfirmedDoubleFillFromRecovery(const SFlashReconSnapshot &snap)
+{
+   datetime now = TimeCurrent();
+
+   if(snap.OpenPositionCount == 0 && snap.PendingOrderCount == 0)
+   {
+      CFlashIntent::ClearCloseIntent(_Symbol, g_config.FlashMagicNumber);
+      CFlashIntent::ClearCancelIntent(_Symbol, g_config.FlashMagicNumber);
+      ClearDoubleFillUnwindActive(_Symbol, g_config.FlashMagicNumber);
+      g_recoveryRepairBudgetActive = false;
+      CFlashPersistence::ClearAll(_Symbol, g_config.FlashMagicNumber);
+      g_setup.Reset();
+      CFlashLogger::Log("RECOVERY", "Double-fill unwind: both accidental legs confirmed closed, account flat. Resuming normal operation.");
+      g_state.TransitionTo(FLASH_STATE_WAITING_FOR_ENTRY, "recovery: double-fill unwind complete, reconciliation confirms clean account");
+      return;
+   }
+
+   if(snap.OpenPositionCount == 0 && snap.PendingOrderCount > 0)
+   {
+      // Not expected in this path by definition (a confirmed double-fill
+      // has no pending-order leg) - do not guess here, hand off to the
+      // existing, already-proven orphaned-order repair instead.
+      CFlashLogger::Error("RECOVERY", "Double-fill unwind: unexpected pending order found with no open positions remaining - handing off to orphaned-order repair rather than guessing.");
+      RepairOrphanedOrderFromRecovery(snap);
+      return;
+   }
+
+   if(snap.OpenPositionCount > 2)
+   {
+      // Broker inventory no longer matches the narrow confirmed shape
+      // this repair path is authorized for (e.g. a third, unrelated
+      // position appeared mid-unwind). Stop acting and escalate.
+      g_recoveryRepairBudget.Escalated = true;
+      CFlashIntent::SaveRecoveryReasonCode(_Symbol, g_config.FlashMagicNumber, "DOUBLEFILL_UNWIND_UNEXPECTED_EXPOSURE_SHAPE");
+      CFlashLogger::Error("RECOVERY", "Double-fill unwind: broker inventory no longer matches the confirmed two-position shape. Remaining in RECOVERY_REQUIRED for mandatory operator review.");
+      return;
+   }
+
+   // One or two Flash-owned positions remain - close the next one via
+   // the same bounded-retry, intent-tracked, market-wait-aware close
+   // primitive RepairOrExitUnprotectedFromRecovery and HandleSetupExit
+   // already use. Only one close is ever in flight at a time, per
+   // CFlashIntent's own single-ticket design - the second leg is closed
+   // on a later tick once this one is broker-confirmed.
+   ulong ticket = snap.Positions[0].Ticket;
+   double volume = snap.Positions[0].Volume;
+   string opTag = "RECOVERY_DOUBLEFILL:" + snap.InternalSetupId + ":" + IntegerToString((int)ticket);
+
+   if(!g_recoveryRepairBudgetActive || g_recoveryRepairBudget.OperationTag != opTag)
+   {
+      g_recoveryRepairBudget.Init(opTag);
+      g_recoveryRepairBudgetActive = true;
+   }
+   if(g_recoveryRepairBudget.Escalated)
+      return; // already escalated below; do not act again silently
+
+   if(CFlashMarketWait::IsBlocked(_Symbol, g_config.FlashMagicNumber, now))
+      return;
+
+   if(!CFlashIntent::CloseIntentOutstanding(_Symbol, g_config.FlashMagicNumber))
+      CFlashIntent::RequestClose(_Symbol, g_config.FlashMagicNumber, ticket, volume);
+
+   CFlashExecutionControl::RecordAttempt(g_recoveryRepairBudget, now);
+   uint closeRetcode = 0;
+   bool closed = CFlashOrders::ClosePositionMarketEx(ticket, "recovery: confirmed double-fill - closing accidental leg", closeRetcode);
+
+   if(closed)
+   {
+      CFlashIntent::ConfirmClosed(_Symbol, g_config.FlashMagicNumber);
+      CFlashIntent::ClearCloseIntent(_Symbol, g_config.FlashMagicNumber);
+      CFlashLogger::Log("RECOVERY",
+         StringFormat("Double-fill unwind: accidental leg %I64u closed and verified. Re-checking account state next tick.", ticket));
+      g_recoveryRepairBudgetActive = false;
+      return; // next tick re-reconciles; the unwind-active flag stays set until reconciliation independently confirms NO_EXPOSURE
+   }
+
+   ENUM_FLASH_EXEC_OUTCOME outcome = CFlashExecutionControl::ClassifyResult(false, closeRetcode, 0.0, volume);
+   if(outcome == FLASH_EXEC_TEMP_MARKET_CLOSED)
+   {
+      CFlashMarketWait::RecordMarketClosed(_Symbol, g_config.FlashMagicNumber, now, "double-fill unwind close rejected: market closed", 3);
+      CFlashLogger::Error("RECOVERY",
+         StringFormat("Double-fill unwind: leg %I64u close deferred, market closed. Remaining in RECOVERY_REQUIRED - operator awareness required.", ticket));
+      return;
+   }
+
+   ENUM_FLASH_RETRY_DECISION decision = CFlashExecutionControl::DecideNextAction(g_recoveryRepairBudget, outcome, now);
+   CFlashExecutionControl::LogDecision(g_recoveryRepairBudget, outcome, decision);
+   if(decision == FLASH_RETRY_RETRY_NOW || decision == FLASH_RETRY_WAIT)
+      return; // try again within budget
+
+   g_recoveryRepairBudget.Escalated = true;
+   CFlashIntent::SaveRecoveryReasonCode(_Symbol, g_config.FlashMagicNumber, "DOUBLEFILL_UNWIND_CLOSE_EXHAUSTED");
+   CFlashLogger::Error("RECOVERY",
+      StringFormat("Double-fill unwind: closing leg %I64u failed or exhausted its bounded retry budget. Remaining in RECOVERY_REQUIRED for mandatory operator review.", ticket));
+}
+
 void TryReconcileFromRecovery()
 {
    SFlashReconSnapshot snap = CFlashReconciliation::Inspect(_Symbol, g_config.FlashMagicNumber, g_isOwner,
@@ -2235,7 +2594,30 @@ void TryReconcileFromRecovery()
       CFlashIntent::CloseIntentOutstanding(_Symbol, g_config.FlashMagicNumber),
       CFlashIntent::CancelIntentOutstanding(_Symbol, g_config.FlashMagicNumber));
 
-   switch(ClassifyRecoveryRepairRoute(snap.Status))
+   // Direct Double-Fill Recovery Correction (2026-09-23). Checked BEFORE
+   // routing: once an unwind is already in progress (persisted, so it
+   // survives a restart mid-unwind), stay on this path regardless of how
+   // the status now classifies - closing one leg legitimately turns
+   // EXPOSURE_DISCREPANCY into MATCHED_ACTIVE_SETUP, which must never be
+   // silently adopted as a directional trade mid-unwind. Detection itself
+   // only ever runs once per episode, and only from EXPOSURE_DISCREPANCY -
+   // every other status and every other cause of EXPOSURE_DISCREPANCY is
+   // completely unaffected and still resolves exactly as before.
+   bool doubleFillUnwindActive = IsDoubleFillUnwindActive(_Symbol, g_config.FlashMagicNumber);
+   if(!doubleFillUnwindActive && snap.Status == FLASH_RECON_EXPOSURE_DISCREPANCY)
+   {
+      SFlashDoubleFillEvidence ev = GatherDoubleFillEvidence(snap);
+      if(ClassifyConfirmedDoubleFill(ev))
+      {
+         SetDoubleFillUnwindActive(_Symbol, g_config.FlashMagicNumber, true);
+         doubleFillUnwindActive = true;
+         CFlashLogger::Error("RECOVERY",
+            StringFormat("Confirmed initial-bracket double-fill for setup %s: both legs (%I64u %s, %I64u %s) share the setup's own placement tag, opened together, matching volume, no reversal recorded. Beginning bounded unwind of both accidental legs - neither is adopted as a directional trade.",
+               snap.InternalSetupId, ev.Position1Ticket, ev.Position1IsBuy ? "BUY" : "SELL", ev.Position2Ticket, ev.Position1IsBuy ? "SELL" : "BUY"));
+      }
+   }
+
+   switch(ClassifyRecoveryRepairRouteWithDoubleFill(snap.Status, doubleFillUnwindActive))
    {
       case FLASH_RECOVERY_ROUTE_CLEAR_TO_WAITING:
          CFlashIntent::ClearCloseIntent(_Symbol, g_config.FlashMagicNumber);
@@ -2258,6 +2640,10 @@ void TryReconcileFromRecovery()
 
       case FLASH_RECOVERY_ROUTE_REPAIR_UNPROTECTED:
          RepairOrExitUnprotectedFromRecovery(snap);
+         return;
+
+      case FLASH_RECOVERY_ROUTE_REPAIR_DOUBLE_FILL:
+         RepairConfirmedDoubleFillFromRecovery(snap);
          return;
 
       default:
@@ -2374,6 +2760,29 @@ void TryAutoRecoverFromRoutineExit()
 //| now also recovering persisted Phase 2 trailing/reversal metadata |
 //| when an active protected position is adopted.                     |
 //+------------------------------------------------------------------+
+// Direct Double-Fill Recovery Correction (2026-09-23). Called
+// immediately after HandleStartupRecovery, at both of its call sites.
+// A no-op for every session that has never set IsDoubleFillUnwindActive -
+// i.e. unchanged behavior for every scenario that existed before this
+// correction. When an unwind IS in progress, this forces the state
+// machine back to RECOVERY_REQUIRED regardless of what the Phase 1
+// startup classifier (which has no knowledge of this correction) just
+// decided - otherwise a restart after only one of the two accidental
+// legs has been closed would let the surviving leg be silently adopted
+// as an ordinary managed position, which the double-fill unwind policy
+// (close both legs, never adopt either as a directional trade) forbids.
+void EnforceDoubleFillUnwindOverride()
+{
+   if(!IsDoubleFillUnwindActive(_Symbol, g_config.FlashMagicNumber))
+      return;
+   if(g_state.Current() == FLASH_STATE_RECOVERY_REQUIRED)
+      return;
+   CFlashLogger::Error("RECOVERY",
+      StringFormat("Double-fill unwind was in progress before this restart/reattachment (state resolved to %s) - overriding back to RECOVERY_REQUIRED so the unwind resumes and neither leg is silently adopted.",
+                   g_state.CurrentString()));
+   g_state.TransitionTo(FLASH_STATE_RECOVERY_REQUIRED, "double-fill unwind in progress before restart - resuming unwind, not adopting a surviving leg");
+}
+
 void HandleStartupRecovery(const SFlashRecoverySnapshot &snap)
 {
    switch(snap.Scenario)
@@ -2631,6 +3040,7 @@ int OnInit()
 
    SFlashRecoverySnapshot recovery = CFlashRecovery::Inspect(_Symbol, g_config.FlashMagicNumber);
    HandleStartupRecovery(recovery);
+   EnforceDoubleFillUnwindOverride();
 
    // Phase 3 Stage 3.1 - an additional, more general reconciliation pass
    // on top of Phase 2's own startup classifier above. This never
@@ -2825,6 +3235,7 @@ void OnTick()
          CFlashLogger::Log("OWNERSHIP", "Conflict cleared - this instance now owns the symbol/magic. Re-running startup recovery.");
          SFlashRecoverySnapshot recovery = CFlashRecovery::Inspect(_Symbol, g_config.FlashMagicNumber);
          HandleStartupRecovery(recovery);
+         EnforceDoubleFillUnwindOverride();
       }
       return; // still blocked (or just reclaimed and will act from next tick)
    }
